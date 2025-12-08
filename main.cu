@@ -7,6 +7,7 @@
 #include "common.h"
 #include "matrix.h"
 #include "timer.h"
+#include <iostream>
 
 void spmspm_cpu(CSRMatrix* csrMatrix1, CSRMatrix* csrMatrix2, COOMatrix* cooMatrix) {
     float* outputValues = (float*) malloc(csrMatrix2->numCols*sizeof(float));
@@ -72,8 +73,19 @@ void verify(COOMatrix* cooMatrixGPU, COOMatrix* cooMatrixCPU, unsigned int quick
 }
 
 int main(int argc, char**argv) {
+    // Source - https://stackoverflow.com/a
+    // Posted by hubs, modified by community. See post 'Timeline' for change history
+    // Retrieved 2025-12-02, License - CC BY-SA 4.0
 
-    cudaDeviceSynchronize();
+    // When I use the vscode remote shell terminal, I get issues with "invalid device ordinal", but not normally when I am merely ssh'ed into the portal
+
+    // int deviceCount = 0;
+    // CHECK_CUDA(cudaGetDeviceCount(&deviceCount));
+
+    // std::cerr << deviceCount << std::endl;
+
+    CHECK_CUDA(cudaSetDevice(0));
+    CHECK_CUDA(cudaDeviceSynchronize());
     setbuf(stdout, NULL);
 
     // Parse arguments

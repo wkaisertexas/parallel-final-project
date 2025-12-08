@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <cstdlib>
+#include <cstring>
 #include <stdio.h>
 
 COOMatrix* createEmptyCOOMatrix(unsigned int numRows, unsigned int numCols, unsigned int capacity) {
@@ -139,7 +140,7 @@ void freeCOOMatrixOnGPU(COOMatrix* cooMatrix) {
 
 void copyCOOMatrixFromGPU(COOMatrix* cooMatrix_d, COOMatrix* cooMatrix_h) {
     COOMatrix cooMatrixShadow;
-    cudaMemcpy(&cooMatrixShadow, cooMatrix_d, sizeof(COOMatrix), cudaMemcpyDeviceToHost);
+    CHECK_CUDA(cudaMemcpy(&cooMatrixShadow, cooMatrix_d, sizeof(COOMatrix), cudaMemcpyDeviceToHost));
     assert(cooMatrix_h->numRows == cooMatrixShadow.numRows);
     assert(cooMatrix_h->numCols == cooMatrixShadow.numCols);
     assert(cooMatrix_h->capacity >= cooMatrixShadow.numNonzeros);
@@ -238,17 +239,18 @@ void freeCSRMatrix(CSRMatrix* csrMatrix) {
 CSRMatrix* createEmptyCSRMatrixOnGPU(unsigned int numRows, unsigned int numCols, unsigned int numNonzeros) {
 
     CSRMatrix csrMatrixShadow;
+    memset(&csrMatrixShadow, 0, sizeof(CSRMatrix));
     csrMatrixShadow.numRows = numRows;
     csrMatrixShadow.numCols = numCols;
     csrMatrixShadow.numNonzeros = numNonzeros;
-    cudaMalloc((void**) &csrMatrixShadow.rowPtrs, (numRows + 1)*sizeof(unsigned int));
-    cudaMalloc((void**) &csrMatrixShadow.colIdxs, numNonzeros*sizeof(unsigned int));
-    cudaMalloc((void**) &csrMatrixShadow.values, numNonzeros*sizeof(float));
+    CHECK_CUDA(cudaMalloc((void**) &csrMatrixShadow.rowPtrs, (numRows + 1)*sizeof(unsigned int)));
+    CHECK_CUDA(cudaMalloc((void**) &csrMatrixShadow.colIdxs, numNonzeros*sizeof(unsigned int)));
+    CHECK_CUDA(cudaMalloc((void**) &csrMatrixShadow.values, numNonzeros*sizeof(float)));
 
     CSRMatrix* csrMatrix;
-    cudaMalloc((void**) &csrMatrix, sizeof(CSRMatrix));
-    cudaMemcpy(csrMatrix, &csrMatrixShadow, sizeof(CSRMatrix), cudaMemcpyHostToDevice);
-    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaMalloc((void**) &csrMatrix, sizeof(CSRMatrix)));
+    CHECK_CUDA(cudaMemcpy(csrMatrix, &csrMatrixShadow, sizeof(CSRMatrix), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
 
     return csrMatrix;
 
@@ -265,13 +267,14 @@ void freeCSRMatrixOnGPU(CSRMatrix* csrMatrix) {
 
 void copyCSRMatrixToGPU(CSRMatrix* csrMatrix_h, CSRMatrix* csrMatrix_d) {
     CSRMatrix csrMatrixShadow;
-    cudaMemcpy(&csrMatrixShadow, csrMatrix_d, sizeof(CSRMatrix), cudaMemcpyDeviceToHost);
+    memset(&csrMatrixShadow, 0, sizeof(CSRMatrix));
+    CHECK_CUDA(cudaMemcpy(&csrMatrixShadow, csrMatrix_d, sizeof(CSRMatrix), cudaMemcpyDeviceToHost));
     assert(csrMatrixShadow.numRows == csrMatrix_h->numRows);
     assert(csrMatrixShadow.numCols == csrMatrix_h->numCols);
     assert(csrMatrixShadow.numNonzeros == csrMatrix_h->numNonzeros);
-    cudaMemcpy(csrMatrixShadow.rowPtrs, csrMatrix_h->rowPtrs, (csrMatrix_h->numRows + 1)*sizeof(unsigned int), cudaMemcpyHostToDevice);
-    cudaMemcpy(csrMatrixShadow.colIdxs, csrMatrix_h->colIdxs, csrMatrix_h->numNonzeros*sizeof(unsigned int), cudaMemcpyHostToDevice);
-    cudaMemcpy(csrMatrixShadow.values, csrMatrix_h->values, csrMatrix_h->numNonzeros*sizeof(float), cudaMemcpyHostToDevice);
-    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaMemcpy(csrMatrixShadow.rowPtrs, csrMatrix_h->rowPtrs, (csrMatrix_h->numRows + 1)*sizeof(unsigned int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(csrMatrixShadow.colIdxs, csrMatrix_h->colIdxs, csrMatrix_h->numNonzeros*sizeof(unsigned int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(csrMatrixShadow.values, csrMatrix_h->values, csrMatrix_h->numNonzeros*sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
 }
 
