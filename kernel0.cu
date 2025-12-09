@@ -4,7 +4,8 @@
 #include "timer.h"
 
 
-constexpr int TILE_SIZE = 32;
+constexpr int TILE_SIZE = 64 * 8;
+
 
 __global__ void kernel0(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
                         COOMatrix *cooMatrix_d) {
