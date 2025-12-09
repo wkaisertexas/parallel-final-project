@@ -8,6 +8,12 @@ EXE         = spmspm
 # testing on the first matrix
 ARGS = -f data/matrix0.txt -0
 
+ncu-ui: default
+	ncu-ui ./$(EXE) $(ARGS)
+
+ncu: default
+	ncu --set full ./$(EXE) $(ARGS)
+
 default: $(EXE)
 
 debug: NVCC_FLAGS=$(DEBUG_FLAGS)
