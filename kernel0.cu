@@ -16,7 +16,7 @@ __global__ void kernel0(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
 
   for (int tileStart = 0; tileStart < csrMatrix2_d->numCols; tileStart += TILE_SIZE) {
     int tileEnd = min(tileStart + TILE_SIZE, csrMatrix2_d->numCols);
-    for(unsigned int i = 0; i < TILE_SIZE; ++i) acc[i] = 0.0f;
+    for(unsigned int i = 0; i < tileEnd - tileStart; ++i) acc[i] = 0.0f;
 
     // for each non-zero at A[row (per-thread), colA]
     for(unsigned int i = csrMatrix1_d->rowPtrs[row]; i < csrMatrix1_d->rowPtrs[row+1]; ++i){
