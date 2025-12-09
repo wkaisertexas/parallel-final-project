@@ -1,28 +1,81 @@
 
 #include "common.h"
+#include "matrix.h"
 #include "timer.h"
 
-void spmspm_gpu2(CSRMatrix* csrMatrix1, CSRMatrix* csrMatrix2, CSRMatrix* csrMatrix1_d, CSRMatrix* csrMatrix2_d, COOMatrix* cooMatrix_d) {
+constexpr int TILE_SIZE = 64 * 32;
 
+__global__ void kernel2(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                        COOMatrix *cooMatrix_d)
+{
+    const unsigned int row = blockIdx.x;
+    if (row >= csrMatrix1_d->numRows)
+        return;
 
+    __shared__ float acc[TILE_SIZE];
 
+    for (int tileStart = 0; tileStart < csrMatrix2_d->numCols; tileStart += TILE_SIZE)
+    {
+        int tileEnd = min(tileStart + TILE_SIZE, csrMatrix2_d->numCols);
+        for (unsigned int i = threadIdx.x; i < tileEnd - tileStart; i += blockDim.x)
+            acc[i] = 0.0f;
 
+        __syncthreads();
 
+        // for each non-zero at A[row (per-thread), colA]
+        for (unsigned int i = csrMatrix1_d->rowPtrs[row] + threadIdx.x; i < csrMatrix1_d->rowPtrs[row + 1]; i += blockDim.x)
+        {
+            // get colA and the value A[row,colA]
+            unsigned int colA = csrMatrix1_d->colIdxs[i];
+            float valA = csrMatrix1_d->values[i];
 
+            // for each non-zero at B[colA, colB]
+            for (unsigned int j = csrMatrix2_d->rowPtrs[colA]; j < csrMatrix2_d->rowPtrs[colA + 1]; ++j)
+            {
+                unsigned int colB = csrMatrix2_d->colIdxs[j];
+                // only accumulate if colB 256is in current tile
+                if (colB >= tileStart && colB < tileEnd)
+                {
+                    atomicAdd(&acc[colB - tileStart], valA * csrMatrix2_d->values[j]);
+                }
+            }
+        }
 
+        __syncthreads();
 
+        // write non-zeros to coo matrix
+        for (int i = threadIdx.x; i < tileEnd - tileStart; i += blockDim.x)
+        {
+            if (acc[i] != 0.0f)
+            {
+                int idx = atomicAdd(&cooMatrix_d->numNonzeros, 1);
+                if (idx < cooMatrix_d->capacity)
+                {
+                    cooMatrix_d->rowIdxs[idx] = row;
+                    cooMatrix_d->colIdxs[idx] = tileStart + i;
+                    cooMatrix_d->values[idx] = acc[i];
+                }
+            }
+        }
 
-
-
-
-
-
-
-
-
-
-
-
-
+        __syncthreads();
+    }
 }
 
+void spmspm_gpu2(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
+                 CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                 COOMatrix *cooMatrix_d)
+{
+    cudaError_t err;
+    // launch kernels
+    int block_size = 64;
+    //   int grid_size = (csrMatrix1->numRows + block_size - 1) / block_size;
+
+    kernel2<<<csrMatrix1->numRows, block_size>>>(csrMatrix1_d, csrMatrix2_d, cooMatrix_d);
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+}

@@ -7,7 +7,7 @@ OBJ         = main.o matrix.o kernel0.o kernel1.o kernel2.o kernel3.o kernel4.o
 EXE         = spmspm
 
 # testing on the first matrix
-ARGS = -f data/matrix0.txt -0
+ARGS = -f data/matrix0.txt -2
 
 ncu-ui: default
 	ncu-ui ./$(EXE) $(ARGS)
