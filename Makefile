@@ -31,6 +31,9 @@ $(EXE): $(OBJ)
 test: default
 	./$(EXE) $(ARGS)
 
+test-k1: default
+	./$(EXE) -f data/matrix0.txt -1
+
 test-dbg: debug
 	./$(EXE) $(ARGS)
 

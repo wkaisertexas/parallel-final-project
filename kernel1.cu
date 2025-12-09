@@ -2,7 +2,9 @@
 #include "common.h"
 #include "timer.h"
 
-constexpr int TILE_SIZE = 64;
+// 64 * 8 => 170 ms
+// 64 * 16 => to 160 ms
+constexpr int TILE_SIZE = 64 * 8;
 
 __global__ void kernel1(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
                         COOMatrix *cooMatrix_d) {
