@@ -79,10 +79,10 @@ int main(int argc, char**argv) {
 
     // When I use the vscode remote shell terminal, I get issues with "invalid device ordinal", but not normally when I am merely ssh'ed into the portal
 
-    // int deviceCount = 0;
-    // CHECK_CUDA(cudaGetDeviceCount(&deviceCount));
+    int deviceCount = 0;
+    CHECK_CUDA(cudaGetDeviceCount(&deviceCount));
 
-    // std::cerr << deviceCount << std::endl;
+    std::cerr << deviceCount << std::endl;
 
     CHECK_CUDA(cudaSetDevice(0));
     CHECK_CUDA(cudaDeviceSynchronize());
