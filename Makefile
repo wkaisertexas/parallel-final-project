@@ -12,7 +12,7 @@ ncu-ui: default
 	ncu-ui ./$(EXE) $(ARGS)
 
 ncu: default
-	ncu --set full ./$(EXE) $(ARGS)
+	ncu --set full -o profile ./$(EXE) $(ARGS)
 
 default: $(EXE)
 
@@ -35,5 +35,5 @@ test-dbg: debug
 	./$(EXE) $(ARGS)
 
 clean:
-	rm -rf $(OBJ) $(EXE)
+	rm -rf $(OBJ) $(EXE) profile.ncu-rep
 
