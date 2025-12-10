@@ -95,9 +95,10 @@ int main(int argc, char**argv) {
     unsigned int runGPUVersion2 = 0;
     unsigned int runGPUVersion3 = 0;
     unsigned int runGPUVersion4 = 0;
+    unsigned int runGrid = 0;
     unsigned int quickVerify = 1;
     int opt;
-    while((opt = getopt(argc, argv, "f:01234v")) >= 0) {
+    while((opt = getopt(argc, argv, "f:01234vg")) >= 0) {
         switch(opt) {
             case 'f': matrixFile = optarg;  break;
             case '0': runGPUVersion0 = 1;   break;
@@ -105,6 +106,7 @@ int main(int argc, char**argv) {
             case '2': runGPUVersion2 = 1;   break;
             case '3': runGPUVersion3 = 1;   break;
             case '4': runGPUVersion4 = 1;   break;
+            case 'g': runGrid = 1;   break;
             case 'v': quickVerify = 0;      break;
             default:  fprintf(stderr, "\nUnrecognized option!\n");
                       exit(0);
@@ -126,7 +128,7 @@ int main(int argc, char**argv) {
     stopTime(&timer);
     printElapsedTime(timer, "    CPU time", CYAN);
 
-    if(runGPUVersion0 || runGPUVersion1 || runGPUVersion2 || runGPUVersion3 || runGPUVersion4) {
+    if(runGPUVersion0 || runGPUVersion1 || runGPUVersion2 || runGPUVersion3 || runGPUVersion4 || runGrid) {
 
         // Allocate GPU memory
         startTime(&timer);
@@ -276,6 +278,31 @@ int main(int argc, char**argv) {
             // Verify
             verify(cooMatrix_h, cooMatrix, quickVerify);
 
+        }
+
+        if(runGrid) {
+            printf("Running GPU version 4\n");
+
+            // Reset
+            clearCOOMatrixOnGPU(cooMatrix_d);
+            cudaDeviceSynchronize();
+
+            // Compute on GPU with version 4
+            startTime(&timer);
+            test_spspm_gpu4(csrMatrix, csrMatrix, csrMatrix_d, csrMatrix_d, cooMatrix_d);
+            cudaDeviceSynchronize();
+            stopTime(&timer);
+            printElapsedTime(timer, "    GPU kernel time (version 4)", GREEN);
+
+            // Copy data from GPU
+            startTime(&timer);
+            copyCOOMatrixFromGPU(cooMatrix_d, cooMatrix_h);
+            cudaDeviceSynchronize();
+            stopTime(&timer);
+            printElapsedTime(timer, "    Copy from GPU time");
+
+            // Verify
+            verify(cooMatrix_h, cooMatrix, quickVerify);
         }
 
         // Free GPU memory

@@ -2,9 +2,10 @@
 #include "common.h"
 #include "matrix.h"
 #include "timer.h"
+#include <iostream>
+#include <chrono>
 
-constexpr int TILE_SIZE = 64 * 32;
-
+template <int TILE_SIZE>
 __global__ void kernel4(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
                         COOMatrix *cooMatrix_d)
 {
@@ -28,6 +29,7 @@ __global__ void kernel4(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
 
         __syncthreads();
 
+        int local_count = 0;
         // for each non-zero at A[row (per-thread), colA]
         const auto row1_start = csrMatrix1_d->rowPtrs[row];
         const auto row1_end = csrMatrix1_d->rowPtrs[row + 1];
@@ -47,33 +49,28 @@ __global__ void kernel4(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
                 // only accumulate if colB 256is in current tile
                 if (colB >= tileStart && colB < tileEnd)
                 {
-                    atomicAdd(&acc[colB - tileStart], valA * csrMatrix2_d->values[j]);
+                    auto prev = atomicAdd(&acc[colB - tileStart], valA * csrMatrix2_d->values[j]);
+                    if (prev == 0.0f)
+                    {
+                        local_count++;
+                    }
                 }
             }
         }
 
-
         // raising this above the previous __syncthreads() allows us to get dual use out of it
-        if (threadIdx.x == 0) {
+        if (threadIdx.x == 0)
+        {
             tile_count = 0;
             tile_write_offset = 0;
         }
 
         __syncthreads();
 
-        // local counting
-        int local_count = 0;
-        for (int i = threadIdx.x; i < tile_diff; i += blockDim.x)
-        {
-            if (acc[i] != 0.0f)
-            {
-                local_count++;
-            }
-        }
-
         // reduction with warp-level shuffls
         unsigned mask = __activemask();
-        for (int offset = 16; offset > 0; offset /= 2) {
+        for (int offset = 16; offset > 0; offset /= 2)
+        {
             local_count += __shfl_down_sync(mask, local_count, offset);
         }
 
@@ -92,7 +89,7 @@ __global__ void kernel4(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
 
         __syncthreads();
 
-        if (tile_count > 0) 
+        if (tile_count > 0)
         {
             for (int i = threadIdx.x; i < tile_diff; i += blockDim.x)
             {
@@ -103,16 +100,13 @@ __global__ void kernel4(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
                     // even though the atomicAdd to the num non-zero was only ~6% of execution time, it
                     // sped up the cooMatrix_d writes
                     auto local_index = atomicAdd(&tile_write_offset, 1);
-                    
+
                     // turn back into a global pos
                     auto global_idx = tile_global_start + local_index;
 
-                    if (global_idx < cooMatrix_d->capacity)
-                    {
-                        cooMatrix_d->rowIdxs[global_idx] = row;
-                        cooMatrix_d->colIdxs[global_idx] = tileStart + i;
-                        cooMatrix_d->values[global_idx] = acc[i];
-                    }
+                    cooMatrix_d->rowIdxs[global_idx] = row;
+                    cooMatrix_d->colIdxs[global_idx] = tileStart + i;
+                    cooMatrix_d->values[global_idx] = acc[i];
                 }
             }
         }
@@ -121,20 +115,129 @@ __global__ void kernel4(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
     }
 }
 
-void spmspm_gpu4(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
-                 CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
-                 COOMatrix *cooMatrix_d)
+template <size_t block_size = 256, int TILE_SIZE = 64 * 32>
+void tmpl_spmspm_gpu4(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
+                      CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                      COOMatrix *cooMatrix_d)
 {
     cudaError_t err;
-    // launch kernels
-    int block_size = 256;
-    //   int grid_size = (csrMatrix1->numRows + block_size - 1) / block_size;
 
-    kernel4<<<csrMatrix1->numRows, block_size>>>(csrMatrix1_d, csrMatrix2_d, cooMatrix_d);
+    // launch kernels
+    kernel4<TILE_SIZE><<<csrMatrix1->numRows, block_size>>>(csrMatrix1_d, csrMatrix2_d, cooMatrix_d);
 
     err = cudaGetLastError();
     if (err != cudaSuccess)
     {
         printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
     }
+}
+
+__global__ void reset_coo_counter(COOMatrix *coo)
+{
+    if (threadIdx.x == 0 && blockIdx.x == 0)
+    {
+        coo->numNonzeros = 0;
+    }
+}
+
+// Helper to run a specific configuration
+template <size_t BLOCK_SIZE, int TILE_SIZE>
+void run_benchmark_config(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
+                          CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                          COOMatrix *cooMatrix_d,
+                          size_t skip, size_t retries)
+{
+    // Warm-up
+    for (size_t i = 0; i < skip; ++i)
+    {
+        reset_coo_counter<<<1, 1>>>(cooMatrix_d);
+        tmpl_spmspm_gpu4<BLOCK_SIZE, TILE_SIZE>(csrMatrix1, csrMatrix2, csrMatrix1_d, csrMatrix2_d, cooMatrix_d);
+    }
+    cudaDeviceSynchronize();
+
+    // Measurement
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (size_t i = 0; i < retries; ++i)
+    {
+        reset_coo_counter<<<1, 1>>>(cooMatrix_d);
+        tmpl_spmspm_gpu4<BLOCK_SIZE, TILE_SIZE>(csrMatrix1, csrMatrix2, csrMatrix1_d, csrMatrix2_d, cooMatrix_d);
+    }
+    cudaDeviceSynchronize();
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    double avg_time_sec = elapsed.count() / retries;
+
+    std::cerr << BLOCK_SIZE
+              << "," << TILE_SIZE
+              << "," << avg_time_sec << std::endl;
+}
+
+// Recursive template to iterate over Tile Sizes
+template <size_t BLOCK_SIZE, int CURRENT_TILE, int MAX_TILE>
+struct TileLoop
+{
+    static void run(CSRMatrix *h1, CSRMatrix *h2, CSRMatrix *d1, CSRMatrix *d2, COOMatrix *d_coo, size_t skip, size_t retries)
+    {
+        run_benchmark_config<BLOCK_SIZE, CURRENT_TILE>(h1, h2, d1, d2, d_coo, skip, retries);
+        
+        if constexpr (CURRENT_TILE * 2 <= MAX_TILE)
+        {
+            TileLoop<BLOCK_SIZE, CURRENT_TILE * 2, MAX_TILE>::run(h1, h2, d1, d2, d_coo, skip, retries);
+        }
+    }
+};
+
+// Recursive template to iterate over Block Sizes
+template <size_t CURRENT_BLOCK, size_t MAX_BLOCK, int MIN_TILE, int MAX_TILE>
+struct BlockLoop
+{
+    static void run(CSRMatrix *h1, CSRMatrix *h2, CSRMatrix *d1, CSRMatrix *d2, COOMatrix *d_coo, size_t skip, size_t retries)
+    {
+        // Run all tile variations for this block size
+        TileLoop<CURRENT_BLOCK, MIN_TILE, MAX_TILE>::run(h1, h2, d1, d2, d_coo, skip, retries);
+
+        if constexpr (CURRENT_BLOCK * 2 <= MAX_BLOCK)
+        {
+            BlockLoop<CURRENT_BLOCK * 2, MAX_BLOCK, MIN_TILE, MAX_TILE>::run(h1, h2, d1, d2, d_coo, skip, retries);
+        }
+    }
+};
+
+void test_spspm_gpu4(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
+                   CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                   COOMatrix *cooMatrix_d)
+{
+    constexpr size_t min_block_size = 64;
+    constexpr size_t max_block_size = 1024;
+
+    constexpr size_t tile_size_min = 64;
+    constexpr size_t tile_size_max = 64 * 64;
+
+    constexpr size_t skip = 3;       // number of launches to ignore for warm-up
+    constexpr size_t num_retries = 10; // number of timed launches
+
+    std::cerr << "Running Benchmark for Kernel 4..." << std::endl;
+    std::cerr << "--------------------------------------------------" << std::endl;
+    std::cerr << "Block Size,Tile Size,Time" << std::endl;
+
+    // Start the compile-time loop recursion
+    BlockLoop<min_block_size, max_block_size, tile_size_min, tile_size_max>::run(
+        csrMatrix1, csrMatrix2, 
+        csrMatrix1_d, csrMatrix2_d, 
+        cooMatrix_d, 
+        skip, num_retries
+    );
+    
+    std::cerr << "--------------------------------------------------" << std::endl;
+}
+
+void spmspm_gpu4(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
+                 CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                 COOMatrix *cooMatrix_d)
+{
+    tmpl_spmspm_gpu4<128, 2048>(csrMatrix1, csrMatrix2,
+                     csrMatrix1_d, csrMatrix2_d,
+                     cooMatrix_d);
 }

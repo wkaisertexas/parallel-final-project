@@ -38,6 +38,11 @@ The magnitude of impact of this optimization was suprising because avoiding the 
 
 The most likely explanation for this fact is how writes to COO are more coalessed because of the faster atomic adds to `tile_write_offset`. This is important because this shows how profilers reporting of time-taken per line can be a misleading metric for cache optimization.
 
+## Kernel 4
+
+![Heatmap of Execution Time vs Grid Size "Heatmap of Execution Time and Kernel Parameters"](./imgs/heatmap_time.png)
+![Time vs Block Size Heatmap "Time vs Block Size Heatmap"](./imgs/time_vs_block_size.png)
+![Time vs Tile Size Heatmap "Tims vs Tile Size Heatmap"](./imgs/time_vs_tile_size.png)
 
 ## Alternative Things Attempting
 

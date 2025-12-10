@@ -42,6 +42,9 @@ test-dbg: debug
 test-all: default
 	./$(EXE) -f data/matrix0.txt -01234
 
+grid: default
+	./$(EXE) -f data/matrix0.txt -g
+
 clean:
 	rm -rf $(OBJ) $(EXE) profile.ncu-rep
 

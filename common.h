@@ -10,5 +10,10 @@ void spmspm_gpu2(CSRMatrix* csrMatrix1, CSRMatrix* csrMatrix2, CSRMatrix* csrMat
 void spmspm_gpu3(CSRMatrix* csrMatrix1, CSRMatrix* csrMatrix2, CSRMatrix* csrMatrix1_d, CSRMatrix* csrMatrix2_d, COOMatrix* cooMatrix_d);
 void spmspm_gpu4(CSRMatrix* csrMatrix1, CSRMatrix* csrMatrix2, CSRMatrix* csrMatrix1_d, CSRMatrix* csrMatrix2_d, COOMatrix* cooMatrix_d);
 
+
+// note: helper added to perform a grid search on the 4th implementation
+void test_spspm_gpu4(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
+                   CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
+                   COOMatrix *cooMatrix_d);
 #endif
 
