@@ -34,8 +34,6 @@ Profiling this kernel in Nsight Compute revealed that the writeback stage to the
 
 ## Kernel 3
 
-Kernel 3 introduces 3 new shared variables: `tile_count`, `tile_global_start` and `tile_write_offset`. Before writing to the cooMatrix, the total number of non-zero elements is tallied. Following this, a global offset from the number of non-zeros is computed. Then atomic additions are made to the `tile_write_offset` before writing to global memory.
+As noted in the Kernel 2 section, the writeback to the COO matrix took up most of the execution time. In Kernel 2, every non-zero element causes an atomic add to global memory, causing significant contention and serialization. Kernel 3 addresses this by batching the global writebacks. First, threads count the non-zero elements using shared memory atomics, then a single thread reserves the entire block's output range with one global atomic (incrementing numNonzeros), and finally threads write to their assigned positions using shared memory atomics. 
 
-The magnitude of impact of this optimization was suprising because avoiding the global memory atomic add to the number of non-zeros per non-zero was only 6% of kernel execution time. However, there was more time-savings when it came to writes made to cooMatrix_d.
-
-The most likely explanation for this fact is how writes to COO are more coalessed because of the faster atomic adds to `tile_write_offset`. This is important because this shows how profilers reporting of time-taken per line can be a misleading metric for cache optimization.
+The magnitude of this optimization's impact was surprising because the global atomic add to numNonzeros accounted for only 6% of kernel execution time. However, the larger savings came from the writes to cooMatrix_d. The most likely explanation is that writes to COO are more coalesced because threads obtain their offsets faster through shared memory atomics on tile_write_offset. This demonstrated to our team how profiler reporting of time-per-line can be misleading when optimizing for cache behavior.
