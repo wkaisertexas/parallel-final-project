@@ -22,3 +22,18 @@ All in all, these optimizations resulted in about a 10% speedup. This kernel opt
 
 # Kernel 2
 
+Kernel 2 provides a basic implementation of shared memory in the way most conducive to our original implementation and, interestingly, breaks a common pattern of optimization: thread coarsing. In this implementation, the accumulator is shared between threads in a block with each block working on a single row. This avoids global memory for accumulators and coalesses reads to `csrMatrix1_d->colIdxs` and `csrMatrix1_d->values`. However, only completing a row per block is doing the opposite of thread coarsening.
+
+However, this adjustment approximately halves execution time from 22.5 ms to 10.2 ms, so the tradeoff is valid.
+
+When profiling this kernel in nsight compute, it can be seen that the writeback stage to the COO matrix takes 53 % of total execution time (5 % + 14.3 % + 14.7 % + 18.3 %). This insight motivated kernel 3's modifications to use shared memory to perform the accumulation.
+
+![Kernel 2 Nsight Compute "Kernel 2 Nsight Compute Profile"](./imgs/kernel2-ncu-report.png)
+
+## Kernel 3
+
+Kernel 3 introduces 3 new shared variables: `tile_count`, `tile_global_start` and `tile_write_offset`. Before writing to the cooMatrix, the total number of non-zero elements is tallied. Following this, a global offset from the number of non-zeros is computed. Then atomic additions are made to the `tile_write_offset` before writing to global memory.
+
+The magnitude of impact of this optimization was suprising because avoiding the global memory atomic add to the number of non-zeros per non-zero was only 6% of kernel execution time. However, there was more time-savings when it came to writes made to cooMatrix_d.
+
+The most likely explanation for this fact is how writes to COO are more coalessed because of the faster atomic adds to `tile_write_offset`. This is important because this shows how profilers reporting of time-taken per line can be a misleading metric for cache optimization.

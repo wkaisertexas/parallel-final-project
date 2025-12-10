@@ -7,15 +7,16 @@ OBJ         = main.o matrix.o kernel0.o kernel1.o kernel2.o kernel3.o kernel4.o
 EXE         = spmspm
 
 # testing on the first matrix
-ARGS = -f data/matrix0.txt -2
+ARGS = -f data/matrix0.txt -3
+
+
+default: $(EXE)
 
 ncu-ui: default
 	ncu-ui ./$(EXE) $(ARGS)
 
 ncu: default
 	ncu --set full -o profile ./$(EXE) $(ARGS)
-
-default: $(EXE)
 
 debug: NVCC_FLAGS=$(DEBUG_FLAGS)
 debug: clean $(EXE)
@@ -37,6 +38,9 @@ test-k1: default
 
 test-dbg: debug
 	./$(EXE) $(ARGS)
+
+test-all: default
+	./$(EXE) -f data/matrix0.txt -0123
 
 clean:
 	rm -rf $(OBJ) $(EXE) profile.ncu-rep
