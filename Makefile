@@ -7,7 +7,7 @@ OBJ         = main.o matrix.o kernel0.o kernel1.o kernel2.o kernel3.o kernel4.o
 EXE         = spmspm
 
 # testing on the first matrix
-ARGS = -f data/matrix0.txt -3
+ARGS = -f data/matrix0.txt -4
 
 
 default: $(EXE)
@@ -40,7 +40,7 @@ test-dbg: debug
 	./$(EXE) $(ARGS)
 
 test-all: default
-	./$(EXE) -f data/matrix0.txt -0123
+	./$(EXE) -f data/matrix0.txt -01234
 
 clean:
 	rm -rf $(OBJ) $(EXE) profile.ncu-rep

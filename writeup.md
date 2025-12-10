@@ -37,3 +37,10 @@ Kernel 3 introduces 3 new shared variables: `tile_count`, `tile_global_start` an
 The magnitude of impact of this optimization was suprising because avoiding the global memory atomic add to the number of non-zeros per non-zero was only 6% of kernel execution time. However, there was more time-savings when it came to writes made to cooMatrix_d.
 
 The most likely explanation for this fact is how writes to COO are more coalessed because of the faster atomic adds to `tile_write_offset`. This is important because this shows how profilers reporting of time-taken per line can be a misleading metric for cache optimization.
+
+
+## Alternative Things Attempting
+
+When attempting to reduce the use of atomics, a prefix sum for non-zero elements was used. Despite avoided atomic operations, using a prefix-sum marginally increased total execution time.
+
+However, because prefix-sum is a constant-time operation the benefit to it's use would increase depending on the sparsity of the input matrix.
