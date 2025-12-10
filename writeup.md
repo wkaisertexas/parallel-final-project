@@ -22,11 +22,13 @@ All in all, these optimizations resulted in about a 10% speedup. This kernel opt
 
 # Kernel 2
 
-Kernel 2 provides a basic implementation of shared memory in the way most conducive to our original implementation and, interestingly, breaks a common pattern of optimization: thread coarsing. In this implementation, the accumulator is shared between threads in a block with each block working on a single row. This avoids global memory for accumulators and coalesses reads to `csrMatrix1_d->colIdxs` and `csrMatrix1_d->values`. However, only completing a row per block is doing the opposite of thread coarsening.
+Kernel 2 addresses the load imbalance present in Kernels 0 and 1. Previously, threads processing rows with many non-zeros performed significantly more work while threads with sparse rows sat idle. Kernel 2 changes the division of labor from "one thread per row" to "one block per row." All threads in a block process the same row of `A`, distributing the iteration over `A`'s non-zeros using a strided access pattern. This improves memory coalescing since adjacent threads access adjacent values from `A`.
 
-However, this adjustment approximately halves execution time from 22.5 ms to 10.2 ms, so the tradeoff is valid.
+Because multiple threads might contribute to the same output column, we move the accumulator to shared memory and use atomic additions. Synchronization barriers ensure the accumulator is initialized before computation, fully populated before writing output, and cleared before the next tile. Another benefit of shared memory is capacity, as we can increase the tile size from 512 to 2048. This reduces the number of passes over A's non-zeros.
 
-When profiling this kernel in nsight compute, it can be seen that the writeback stage to the COO matrix takes 53 % of total execution time (5 % + 14.3 % + 14.7 % + 18.3 %). This insight motivated kernel 3's modifications to use shared memory to perform the accumulation.
+Kernel 2 approximately halves execution time from 22.5 ms to 10.2 ms.
+
+Profiling this kernel in Nsight Compute revealed that the writeback stage to the COO matrix takes 53% of total execution time (5% + 14.3% + 14.7% + 18.3%). This insight motivated kernel 3's modifications to use shared memory to perform the accumulation. Below is a screenshot from Nsight Compute demonstrating the issue:
 
 ![Kernel 2 Nsight Compute "Kernel 2 Nsight Compute Profile"](./imgs/kernel2-ncu-report.png)
 
