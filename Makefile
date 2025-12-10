@@ -2,7 +2,7 @@
 NVCC        = nvcc
 NVCC_FLAGS  = -O3
 # we need optimization when doing profiling otherwise kernel times are very different
-DEBUG_FLAGS = -O2 -G -g -lineinfo
+DEBUG_FLAGS = -O3 -lineinfo
 OBJ         = main.o matrix.o kernel0.o kernel1.o kernel2.o kernel3.o kernel4.o
 EXE         = spmspm
 

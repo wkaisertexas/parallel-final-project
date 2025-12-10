@@ -21,7 +21,8 @@ __global__ void kernel3(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
     for (int tileStart = 0; tileStart < csrMatrix2_d->numCols; tileStart += TILE_SIZE)
     {
         int tileEnd = min(tileStart + TILE_SIZE, csrMatrix2_d->numCols);
-        for (unsigned int i = threadIdx.x; i < tileEnd - tileStart; i += blockDim.x)
+        const auto tile_diff = tileEnd - tileStart;
+        for (unsigned int i = threadIdx.x; i < tile_diff; i += blockDim.x)
             acc[i] = 0.0f;
 
         __syncthreads();
@@ -60,7 +61,7 @@ __global__ void kernel3(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
         __syncthreads();
 
         // local count of total non-zeros
-        for (int i = threadIdx.x; i < tileEnd - tileStart; i += blockDim.x)
+        for (int i = threadIdx.x; i < tile_diff; i += blockDim.x)
         {
             if (acc[i] != 0.0f)
             {
@@ -79,7 +80,7 @@ __global__ void kernel3(CSRMatrix *csrMatrix1_d, CSRMatrix *csrMatrix2_d,
 
         if (tile_count > 0) 
         {
-            for (int i = threadIdx.x; i < tileEnd - tileStart; i += blockDim.x)
+            for (int i = threadIdx.x; i < tile_diff; i += blockDim.x)
             {
                 if (acc[i] != 0.0f)
                 {
@@ -112,7 +113,7 @@ void spmspm_gpu3(CSRMatrix *csrMatrix1, CSRMatrix *csrMatrix2,
 {
     cudaError_t err;
     // launch kernels
-    int block_size = 64;
+    int block_size = 256;
     //   int grid_size = (csrMatrix1->numRows + block_size - 1) / block_size;
 
     kernel3<<<csrMatrix1->numRows, block_size>>>(csrMatrix1_d, csrMatrix2_d, cooMatrix_d);
