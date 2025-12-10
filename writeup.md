@@ -55,9 +55,9 @@ Profiling this kernel in Nsight Compute revealed that the writeback stage to the
 
 As noted in the Kernel 2 section, the writeback to the COO matrix took up most of the execution time. In Kernel 2, every non-zero element causes an atomic add to global memory, causing significant contention and serialization. Kernel 3 addresses this by batching the global writebacks. First, threads count the non-zero elements using shared memory atomics, then a single thread reserves the entire block's output range with one global atomic (incrementing numNonzeros), and finally threads write to their assigned positions using shared memory atomics. 
 
-The magnitude of impact of this optimization was suprising because avoiding the global memory atomic add to the number of non-zeros per non-zero was only 6% of kernel execution time. However, there was more time-savings when it came to writes made to cooMatrix_d.
+The magnitude of impact of this optimization was surprising because avoiding the global memory atomic add to the number of non-zeros per non-zero was only 6% of kernel execution time. However, there was more time-savings when it came to writes made to cooMatrix_d.
 
-The most likely explanation for this fact is how writes to COO are more coalessed because of the faster atomic adds to `tile_write_offset`. This is important because this shows how profilers reporting of time-taken per line can be a misleading metric for cache optimization.
+The most likely explanation for this fact is how writes to COO are more coalesced because of the faster atomic adds to `tile_write_offset`. This is important because this shows how profilers reporting of time-taken per line can be a misleading metric for cache optimization.
 
 ### Kernel 4
 
